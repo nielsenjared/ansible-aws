@@ -45,12 +45,8 @@
   # Target: where our play will run and options it will run with
   hosts: tag_Name_Ansible
 
-  # Roles: list of roles to be imported into the play
   roles:
     - { role: webapp, target_dir: /usr/share/nginx/html }
-
-  # Target: where our play will run and options it will run with
-  hosts: tag_Name_Ansible
 
   # Task: the list of tasks that will be executed within the play, this section
   # can also be used for pre and post tasks

@@ -25,7 +25,7 @@ export AWS_ACCESS_KEY_ID='ABCDEFGHIJKLMNOP'
 ```
 And:
 ```
-    1234567890etc'
+export AWS_SECRET_ACCESS_KEY=`1234567890etc'
 ```
 
 Create `ec2_playbook.yaml`:
@@ -60,12 +60,12 @@ sudo pip3 install boto boto3
 ```
 
 Run the playbook: 
-```
+```sh
 ansible-playbook ec2_playbook.yaml
 ```
 
 The output should be:
-```
+```sh
 PLAY [localhost] ***************************************************************************
 
 TASK [Create a security group in AWS for SSH access and HTTP] ******************************
@@ -119,6 +119,25 @@ ignore_errors: true
 
 ## Dynamic Inventory
 
+
+TODO UPDATE TO USE aws_ec2 plugin https://docs.ansible.com/ansible/latest/collections/amazon/aws/aws_ec2_inventory.html
+
+The aws_ec2 plugin is a part of the `amazon.aws` collection. Check to see if it is installed:
+```
+ansible-galaxy collection list
+```
+
+It'll be right at the top of the list. 
+
+If it's not installed:
+```
+ansible-galaxy collection install amazon.aws
+```
+
+See: https://aaronoellis.com/articles/replacing-ansibles-aws-ec2py-script-with-the-aws-ec2-plugin
+
+---
+
 Make a directory for the inventory: 
 ```
 mkdir inventory
@@ -138,28 +157,6 @@ Make the inventory executable:
 ```
 chmod u+x ec2.py
 ```
-
-
-
-
-
-
-
-TODO UPDATE TO USE aws_ec2 plugin https://docs.ansible.com/ansible/latest/collections/amazon/aws/aws_ec2_inventory.html
-
-The aws_ec2 plugin is a part of the `amazon.aws` collection. Check to see if it is installed:
-```
-ansible-galaxy collection list
-```
-
-It'll be right at the top of the list. 
-
-If it's not installed:
-```
-ansible-galaxy collection install amazon.aws
-```
-
-See: https://aaronoellis.com/articles/replacing-ansibles-aws-ec2py-script-with-the-aws-ec2-plugin
 
 
 TODO `ansible.cfg`:
@@ -184,6 +181,112 @@ Check that the instances are pingable:
 ```
 ansible tag_Name_Ansible -m ping -o
 ```
+
+
+## Roles
+
+Create a new role:
+```sh
+ansible-galaxy init nginx
+```
+
+In `/nginx/handlers/main.yml` add:
+```yml
+
+- name: Check HTTP Service
+  uri:
+    url: http://{{ ansible_default_ipv4.address }}
+    status_code: 200 
+```
+
+In `/nginx/vars/main.yml` add:
+```yml
+target_dir: 
+```
+
+In `/nginx/tasks/main.yml` add:
+```yml
+- name: Install EPEL
+  yum:
+    name: epel-release
+    update_cache: yes
+    state: latest
+  when: ansible_distribution == 'CentOS'
+  tags:
+    - install-epel
+
+- name: Install Nginx
+  package:
+    name: nginx
+    state: latest
+  tags:
+    - install-nginx
+
+- name: Restart nginx
+  service:
+    name: nginx
+    state: restarted
+  notify: Check HTTP Service
+  tags:
+    - always
+```
+
+
+Create a role for `webapp`:
+```sh
+ansible-galaxy init webapp
+```
+
+TODO templates
+
+TODO files
+
+
+In /`webapp/vars/main.yml` add: 
+```yml
+target_dir: /var/www/html
+```
+
+In `/webapp/tasks/main.yml` add:
+```yml
+- name: Template index.html-easter_egg.j2 to index.html on target
+  template:
+    src: index.html-easter_egg.j2
+    dest: "{{ target_dir }}/index.html"
+    mode: 0644
+  tags:
+    - deploy-app
+
+- name: Install unzip
+  package:
+    name: unzip
+    state: present
+
+- name: Unarchive playbook stacker game
+  unarchive:
+    src: playbook_stacker.zip
+    dest: "{{ target_dir }}"
+    mode: 0755
+  tags:
+    - deploy-app
+```
+
+
+
+In `webapp/meta/main.yml` add `nginx` as a dependency:
+```yml
+dependencies: []
+  - nginx
+```
+
+
+
+Add the roles to `ec2_playbook.yml`:
+```yml
+  roles:
+    - { role: webapp, target_dir: /usr/share/nginx/html }
+```
+
 
 
 Repace this:
@@ -221,7 +324,7 @@ ansible-playbook ec2_playbook.yaml
 
 ## Remove Group and Terminate Instances
 
-TODO add the following to pause:
+Add the following to pause:
 ```yml
   hosts: tag_Name_Ansible
 
